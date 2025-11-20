@@ -76,7 +76,7 @@ It has been used for the development of this package.
 ## Tools
 
 See the tools under `cmd/`. There's a command line tool for sending
-SMS from the command line, and an HTTP server with WebSocket support.
+SMS from the command line.
 
 ## Supported PDUs
 
