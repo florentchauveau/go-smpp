@@ -110,7 +110,7 @@ func ExampleTransceiver() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		io.WriteString(w, sm.RespID())
+		_, _ = io.WriteString(w, sm.RespID())
 	})
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

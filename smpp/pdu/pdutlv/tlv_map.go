@@ -15,28 +15,28 @@ type Map map[Tag]Body
 // returns error if the value cannot be converted to type Data.
 //
 // This is a shortcut for m[t] = NewTLV(t, v) converting v properly.
-func (m Map) Set(t Tag, v interface{}) error {
-	switch v.(type) {
+func (m Map) Set(t Tag, v any) error {
+	switch v := v.(type) {
 	case nil:
 		m[t] = NewTLV(t, nil) // use default value
 	case uint8:
-		m[t] = NewTLV(t, []byte{v.(uint8)})
+		m[t] = NewTLV(t, []byte{v})
 	case int:
-		m[t] = NewTLV(t, []byte{uint8(v.(int))})
+		m[t] = NewTLV(t, []byte{uint8(v)})
 	case string:
-		m[t] = NewTLV(t, []byte(v.(string)))
+		m[t] = NewTLV(t, []byte(v))
 	case String:
-		m[t] = NewTLV(t, []byte(v.(String)))
+		m[t] = NewTLV(t, []byte(v))
 	case CString:
-		value := []byte(v.(CString))
+		value := []byte(v)
 		if len(value) == 0 || value[len(value)-1] != 0x00 {
 			value = append(value, 0x00)
 		}
 		m[t] = NewTLV(t, value)
 	case []byte:
-		m[t] = NewTLV(t, []byte(v.([]byte)))
+		m[t] = NewTLV(t, []byte(v))
 	case Body:
-		m[t] = v.(Body)
+		m[t] = v
 	default:
 		return fmt.Errorf("unsupported Tag-Length-Value field data: %#v", v)
 	}

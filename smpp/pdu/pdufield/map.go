@@ -20,24 +20,24 @@ type Map map[Name]Body
 //
 // If k is ShortMessage and v is of type pdutext.Codec, text is
 // encoded and data_coding PDU and sm_length PDUs are set.
-func (m Map) Set(k Name, v interface{}) error {
-	switch v.(type) {
+func (m Map) Set(k Name, v any) error {
+	switch v := v.(type) {
 	case nil:
 		m[k] = New(k, nil) // use default value
 	case uint8:
-		m[k] = New(k, []byte{v.(uint8)})
+		m[k] = New(k, []byte{v})
 	case int:
-		m[k] = New(k, []byte{uint8(v.(int))})
+		m[k] = New(k, []byte{uint8(v)})
 	case string:
-		m[k] = New(k, []byte(v.(string)))
+		m[k] = New(k, []byte(v))
 	case []byte:
-		m[k] = New(k, []byte(v.([]byte)))
+		m[k] = New(k, []byte(v))
 	case DeliverySetting:
-		m[k] = New(k, []byte{uint8(v.(DeliverySetting))})
+		m[k] = New(k, []byte{uint8(v)})
 	case Body:
-		m[k] = v.(Body)
+		m[k] = v
 	case pdutext.Codec:
-		c := v.(pdutext.Codec)
+		c := v
 		m[k] = New(k, c.Encode())
 		if k == ShortMessage {
 			m[DataCoding] = &Fixed{Data: uint8(c.Type())}

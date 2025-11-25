@@ -97,9 +97,9 @@ func (t *Transmitter) Bind() <-chan ConnStatus {
 func (t *Transmitter) bindFunc(c Conn) error {
 	p := pdu.NewBindTransmitter()
 	f := p.Fields()
-	f.Set(pdufield.SystemID, t.User)
-	f.Set(pdufield.Password, t.Passwd)
-	f.Set(pdufield.SystemType, t.SystemType)
+	_ = f.Set(pdufield.SystemID, t.User)
+	_ = f.Set(pdufield.Password, t.Passwd)
+	_ = f.Set(pdufield.SystemType, t.SystemType)
 	resp, err := bind(c, p)
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func (t *Transmitter) handlePDU(f HandlerFunc) {
 		}
 		if p.Header().ID == pdu.DeliverSMID { // Send DeliverSMResp
 			pResp := pdu.NewDeliverSMRespSeq(p.Header().Seq)
-			t.cl.Write(pResp)
+			_ = t.cl.Write(pResp)
 		}
 	}
 	t.tx.Lock()
@@ -270,6 +270,38 @@ func (sm *ShortMessage) UnsuccessSmes() ([]UnsucessDest, error) {
 	return nil, errors.New("Cannot convert PDU field to UnSmeList")
 }
 
+// Clone creates a deep copy of the ShortMessage.
+func (sm *ShortMessage) Clone() *ShortMessage {
+	clone := new(ShortMessage)
+	clone.Src = sm.Src
+	clone.Dst = sm.Dst
+	clone.DstList = make([]string, len(sm.DstList))
+	copy(clone.DstList, sm.DstList)
+	clone.DLs = make([]string, len(sm.DLs))
+	copy(clone.DLs, sm.DLs)
+	clone.Text = sm.Text
+	clone.Validity = sm.Validity
+	clone.Register = sm.Register
+	clone.TLVFields = make(pdutlv.Fields)
+	for k, v := range sm.TLVFields {
+		clone.TLVFields[k] = v
+	}
+	clone.ServiceType = sm.ServiceType
+	clone.SourceAddrTON = sm.SourceAddrTON
+	clone.SourceAddrNPI = sm.SourceAddrNPI
+	clone.DestAddrTON = sm.DestAddrTON
+	clone.DestAddrNPI = sm.DestAddrNPI
+	clone.ESMClass = sm.ESMClass
+	clone.ProtocolID = sm.ProtocolID
+	clone.PriorityFlag = sm.PriorityFlag
+	clone.ScheduleDeliveryTime = sm.ScheduleDeliveryTime
+	clone.ReplaceIfPresentFlag = sm.ReplaceIfPresentFlag
+	clone.SMDefaultMsgID = sm.SMDefaultMsgID
+	clone.NumberDests = sm.NumberDests
+	clone.resp.p = sm.Resp()
+	return clone
+}
+
 func (t *Transmitter) do(p pdu.Body) (*tx, error) {
 	t.cl.Lock()
 	notbound := t.cl.client == nil
@@ -332,13 +364,10 @@ func (t *Transmitter) SubmitLongMsg(sm *ShortMessage) ([]ShortMessage, error) {
 	switch sm.Text.(type) {
 	case pdutext.GSM7:
 		maxLen = 152 // to avoid an escape character being split between payloads
-		break
 	case pdutext.GSM7Packed:
 		maxLen = 132 // to avoid an escape character being split between payloads
-		break
 	case pdutext.UCS2:
 		maxLen = 132 // to avoid a character being split between payloads
-		break
 	}
 	rawMsg := sm.Text.Encode()
 	countParts := int((len(rawMsg)-1)/maxLen) + 1
@@ -355,33 +384,33 @@ func (t *Transmitter) SubmitLongMsg(sm *ShortMessage) ([]ShortMessage, error) {
 	UDHHeader[3] = uint8(rn >> 8)    // most significant byte of the reference number
 	UDHHeader[4] = uint8(rn)         // least significant byte of the reference number
 	UDHHeader[5] = uint8(countParts) // total number of message parts
-	for i := 0; i < countParts; i++ {
+	for i := range countParts {
 		UDHHeader[6] = uint8(i + 1) // current message part
 		p := pdu.NewSubmitSM(sm.TLVFields)
 		f := p.Fields()
-		f.Set(pdufield.SourceAddr, sm.Src)
-		f.Set(pdufield.DestinationAddr, sm.Dst)
+		_ = f.Set(pdufield.SourceAddr, sm.Src)
+		_ = f.Set(pdufield.DestinationAddr, sm.Dst)
 		if i != countParts-1 {
-			f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:(i+1)*maxLen]...)))
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:(i+1)*maxLen]...)))
 		} else {
-			f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:]...)))
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:]...)))
 		}
-		f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
+		_ = f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
 		if sm.Validity != time.Duration(0) {
-			f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
+			_ = f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
 		}
-		f.Set(pdufield.ServiceType, sm.ServiceType)
-		f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
-		f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
-		f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
-		f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
-		f.Set(pdufield.ESMClass, 0x40)
-		f.Set(pdufield.ProtocolID, sm.ProtocolID)
-		f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
-		f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
-		f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
-		f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
-		f.Set(pdufield.DataCoding, uint8(sm.Text.Type()))
+		_ = f.Set(pdufield.ServiceType, sm.ServiceType)
+		_ = f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
+		_ = f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
+		_ = f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
+		_ = f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
+		_ = f.Set(pdufield.ESMClass, 0x40)
+		_ = f.Set(pdufield.ProtocolID, sm.ProtocolID)
+		_ = f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
+		_ = f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
+		_ = f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
+		_ = f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
+		_ = f.Set(pdufield.DataCoding, uint8(sm.Text.Type()))
 		resp, err := t.do(p)
 		if err != nil {
 			return nil, err
@@ -401,33 +430,33 @@ func (t *Transmitter) SubmitLongMsg(sm *ShortMessage) ([]ShortMessage, error) {
 		if resp.Err != nil {
 			return parts, resp.Err
 		}
-		parts = append(parts, *sm)
+		parts = append(parts, *sm.Clone())
 	}
 	return parts, nil
 }
 
 func (t *Transmitter) submitMsg(sm *ShortMessage, p pdu.Body, dataCoding uint8) (*ShortMessage, error) {
 	f := p.Fields()
-	f.Set(pdufield.SourceAddr, sm.Src)
-	f.Set(pdufield.DestinationAddr, sm.Dst)
-	f.Set(pdufield.ShortMessage, sm.Text)
-	f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
+	_ = f.Set(pdufield.SourceAddr, sm.Src)
+	_ = f.Set(pdufield.DestinationAddr, sm.Dst)
+	_ = f.Set(pdufield.ShortMessage, sm.Text)
+	_ = f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
 	// Check if the message has validity set.
 	if sm.Validity != time.Duration(0) {
-		f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
+		_ = f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
 	}
-	f.Set(pdufield.ServiceType, sm.ServiceType)
-	f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
-	f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
-	f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
-	f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
-	f.Set(pdufield.ESMClass, sm.ESMClass)
-	f.Set(pdufield.ProtocolID, sm.ProtocolID)
-	f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
-	f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
-	f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
-	f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
-	f.Set(pdufield.DataCoding, dataCoding)
+	_ = f.Set(pdufield.ServiceType, sm.ServiceType)
+	_ = f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
+	_ = f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
+	_ = f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
+	_ = f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
+	_ = f.Set(pdufield.ESMClass, sm.ESMClass)
+	_ = f.Set(pdufield.ProtocolID, sm.ProtocolID)
+	_ = f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
+	_ = f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
+	_ = f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
+	_ = f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
+	_ = f.Set(pdufield.DataCoding, dataCoding)
 	resp, err := t.do(p)
 	if err != nil {
 		return nil, err
@@ -476,25 +505,25 @@ func (t *Transmitter) submitMsgMulti(sm *ShortMessage, p pdu.Body, dataCoding ui
 	}
 
 	f := p.Fields()
-	f.Set(pdufield.SourceAddr, sm.Src)
-	f.Set(pdufield.DestinationList, bArray)
-	f.Set(pdufield.ShortMessage, sm.Text)
-	f.Set(pdufield.NumberDests, uint8(numberOfDest))
-	f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
+	_ = f.Set(pdufield.SourceAddr, sm.Src)
+	_ = f.Set(pdufield.DestinationList, bArray)
+	_ = f.Set(pdufield.ShortMessage, sm.Text)
+	_ = f.Set(pdufield.NumberDests, uint8(numberOfDest))
+	_ = f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
 	// Check if the message has validity set.
 	if sm.Validity != time.Duration(0) {
-		f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
+		_ = f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
 	}
-	f.Set(pdufield.ServiceType, sm.ServiceType)
-	f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
-	f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
-	f.Set(pdufield.ESMClass, sm.ESMClass)
-	f.Set(pdufield.ProtocolID, sm.ProtocolID)
-	f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
-	f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
-	f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
-	f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
-	f.Set(pdufield.DataCoding, dataCoding)
+	_ = f.Set(pdufield.ServiceType, sm.ServiceType)
+	_ = f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
+	_ = f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
+	_ = f.Set(pdufield.ESMClass, sm.ESMClass)
+	_ = f.Set(pdufield.ProtocolID, sm.ProtocolID)
+	_ = f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
+	_ = f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
+	_ = f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
+	_ = f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
+	_ = f.Set(pdufield.DataCoding, dataCoding)
 	resp, err := t.do(p)
 	if err != nil {
 		return nil, err
@@ -527,10 +556,10 @@ type QueryResp struct {
 func (t *Transmitter) QuerySM(src, msgid string, srcTON, srcNPI uint8) (*QueryResp, error) {
 	p := pdu.NewQuerySM()
 	f := p.Fields()
-	f.Set(pdufield.SourceAddr, src)
-	f.Set(pdufield.SourceAddrTON, srcTON)
-	f.Set(pdufield.SourceAddrNPI, srcNPI)
-	f.Set(pdufield.MessageID, msgid)
+	_ = f.Set(pdufield.SourceAddr, src)
+	_ = f.Set(pdufield.SourceAddrTON, srcTON)
+	_ = f.Set(pdufield.SourceAddrNPI, srcNPI)
+	_ = f.Set(pdufield.MessageID, msgid)
 
 	resp, err := t.do(p)
 	if err != nil {

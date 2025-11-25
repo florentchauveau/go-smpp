@@ -65,7 +65,7 @@ func main() {
 		cmdShortMessage,
 		cmdQueryMessage,
 	}
-	app.Run(os.Args)
+	_ = app.Run(os.Args)
 }
 
 var cmdShortMessage = cli.Command{

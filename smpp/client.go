@@ -143,6 +143,7 @@ func (c *client) Bind() {
 		go c.enquireLink(eli)
 		c.notify(&connStatus{s: Connected})
 		delay = 1
+	Loop:
 		for {
 			p, err := c.conn.Read()
 			if err != nil {
@@ -157,7 +158,7 @@ func (c *client) Bind() {
 				pResp := pdu.NewEnquireLinkRespSeq(p.Header().Seq)
 				err := c.conn.Write(pResp)
 				if err != nil {
-					break
+					break Loop
 				}
 			case pdu.EnquireLinkRespID:
 				c.updateEliTime()
@@ -188,7 +189,7 @@ func (c *client) enquireLink(stop chan struct{}) {
 			// check the time of the last received EnquireLinkResp
 			c.eliMtx.RLock()
 			if time.Since(c.eliTime) >= c.EnquireLinkTimeout {
-				c.conn.Write(pdu.NewUnbind())
+				_ = c.conn.Write(pdu.NewUnbind())
 				c.conn.Close()
 				c.eliMtx.RUnlock()
 				return
@@ -233,7 +234,7 @@ func (c *client) Read() (pdu.Body, error) {
 // Write serializes the given PDU and writes to the connection.
 func (c *client) Write(w pdu.Body) error {
 	if c.RateLimiter != nil {
-		c.RateLimiter.Wait(c.lmctx)
+		_ = c.RateLimiter.Wait(c.lmctx)
 	}
 	return c.conn.Write(w)
 }
@@ -283,7 +284,7 @@ func (c *client) respTimeout() <-chan time.Time {
 // bind attempts to bind the connection.
 func bind(c Conn, p pdu.Body) (pdu.Body, error) {
 	f := p.Fields()
-	f.Set(pdufield.InterfaceVersion, 0x34)
+	_ = f.Set(pdufield.InterfaceVersion, 0x34)
 	err := c.Write(p)
 	if err != nil {
 		return nil, err

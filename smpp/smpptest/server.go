@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"sync"
 
 	"github.com/florentchauveau/go-smpp/smpp/pdu"
 	"github.com/florentchauveau/go-smpp/smpp/pdu/pdufield"
@@ -38,7 +37,6 @@ type Server struct {
 	Handler HandlerFunc
 
 	conns []Conn
-	mu    sync.Mutex
 	l     net.Listener
 }
 
@@ -112,7 +110,7 @@ func (srv *Server) Serve() {
 // BroadcastMessage broadcasts a test PDU to the all bound clients
 func (srv *Server) BroadcastMessage(p pdu.Body) {
 	for i := range srv.conns {
-		srv.conns[i].Write(p)
+		_ = srv.conns[i].Write(p)
 	}
 }
 
@@ -166,7 +164,7 @@ func (srv *Server) auth(c *conn) error {
 	if passwd.String() != srv.Passwd {
 		return errors.New("invalid passwd")
 	}
-	resp.Fields().Set(pdufield.SystemID, DefaultSystemID)
+	_ = resp.Fields().Set(pdufield.SystemID, DefaultSystemID)
 
 	return c.Write(resp)
 }
@@ -184,5 +182,5 @@ func EchoHandler(cli Conn, m pdu.Body) {
 	//     cli.Write(resp)
 	//
 	// We just echo m back:
-	cli.Write(m)
+	_ = cli.Write(m)
 }

@@ -22,9 +22,9 @@ func TestConn(t *testing.T) {
 	defer c.Close()
 	p := pdu.NewBindTransmitter()
 	f := p.Fields()
-	f.Set(pdufield.SystemID, smpptest.DefaultUser)
-	f.Set(pdufield.Password, smpptest.DefaultPasswd)
-	f.Set(pdufield.InterfaceVersion, 0x34)
+	_ = f.Set(pdufield.SystemID, smpptest.DefaultUser)
+	_ = f.Set(pdufield.Password, smpptest.DefaultPasswd)
+	_ = f.Set(pdufield.InterfaceVersion, 0x34)
 	if err = c.Write(p); err != nil {
 		t.Fatal(err)
 	}

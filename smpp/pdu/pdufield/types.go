@@ -63,7 +63,7 @@ func (f *Fixed) Len() int {
 }
 
 // Raw implements the Data interface.
-func (f *Fixed) Raw() interface{} {
+func (f *Fixed) Raw() any {
 	return f.Data
 }
 
@@ -94,7 +94,7 @@ func (v *Variable) Len() int {
 }
 
 // Raw implements the Data interface.
-func (v *Variable) Raw() interface{} {
+func (v *Variable) Raw() any {
 	return v.Data
 }
 
@@ -131,7 +131,7 @@ func (sm *SM) Len() int {
 }
 
 // Raw implements the Data interface.
-func (sm *SM) Raw() interface{} {
+func (sm *SM) Raw() any {
 	return sm.Data
 }
 
@@ -176,7 +176,7 @@ func (ds *DestSme) Len() int {
 }
 
 // Raw implements the Data interface.
-func (ds *DestSme) Raw() interface{} {
+func (ds *DestSme) Raw() any {
 	return ds.Bytes()
 }
 
@@ -216,7 +216,7 @@ func (dsl *DestSmeList) Len() int {
 }
 
 // Raw implements the Data interface.
-func (dsl *DestSmeList) Raw() interface{} {
+func (dsl *DestSmeList) Raw() any {
 	return dsl.Bytes()
 }
 
@@ -258,7 +258,7 @@ func (us *UnSme) Len() int {
 }
 
 // Raw implements the Data interface.
-func (us *UnSme) Raw() interface{} {
+func (us *UnSme) Raw() any {
 	return us.Bytes()
 }
 
@@ -298,7 +298,7 @@ func (usl *UnSmeList) Len() int {
 }
 
 // Raw implements the Data interface.
-func (usl *UnSmeList) Raw() interface{} {
+func (usl *UnSmeList) Raw() any {
 	return usl.Bytes()
 }
 
@@ -339,7 +339,7 @@ func (udh *UDH) Len() int {
 }
 
 // Raw implements the Data interface.
-func (udh *UDH) Raw() interface{} {
+func (udh *UDH) Raw() any {
 	return udh.Bytes()
 }
 
@@ -378,7 +378,7 @@ func (udhl *UDHList) Len() int {
 }
 
 // Raw implements the Data interface.
-func (udhl *UDHList) Raw() interface{} {
+func (udhl *UDHList) Raw() any {
 	return udhl.Bytes()
 }
 

@@ -6,7 +6,7 @@ package pdutext
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -47,10 +47,9 @@ func TestISO88595Decoder(t *testing.T) {
 }
 
 func readBytesFromFile(filename string) []byte {
-	dat, err := ioutil.ReadFile(filename)
+	dat, err := os.ReadFile(filename)
 	if err != nil {
 		panic("Error reading testdata file; " + filename + ", err " + err.Error())
-	} else {
-		return dat
 	}
+	return dat
 }

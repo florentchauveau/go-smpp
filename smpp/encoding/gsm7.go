@@ -238,9 +238,7 @@ func (g *gsm7Decoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, er
 		return 0, 0, transform.ErrShortDst
 	}
 
-	for x, b := range text {
-		dst[x] = b
-	}
+	copy(dst, text)
 	return nDst, nSrc, err
 }
 
@@ -279,9 +277,7 @@ func (g *gsm7Encoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, er
 	}
 
 	if !g.packed {
-		for x, v := range septets {
-			dst[x] = v
-		}
+		copy(dst, septets)
 		return nDst, nSrc, nil
 	}
 

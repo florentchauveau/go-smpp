@@ -15,7 +15,7 @@ func TestMapSet(t *testing.T) {
 	m := make(Map)
 	test := []struct {
 		k  Name
-		v  interface{}
+		v  any
 		ok bool
 	}{
 		{SystemID, nil, true},

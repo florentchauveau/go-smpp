@@ -12,7 +12,7 @@ func TestMapSet(t *testing.T) {
 	m := make(Map)
 	test := []struct {
 		k  Tag
-		v  interface{}
+		v  any
 		ok bool
 	}{
 		{TagDestAddrSubunit, nil, true},

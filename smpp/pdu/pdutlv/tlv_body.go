@@ -11,7 +11,7 @@ import (
 // Body is an interface for manipulating binary PDU Tag-Length-Value field data.
 type Body interface {
 	Len() int
-	Raw() interface{}
+	Raw() any
 	String() string
 	Bytes() []byte
 	SerializeTo(w io.Writer) error
@@ -20,5 +20,5 @@ type Body interface {
 // NewTLV parses the given binary data and returns a Data object,
 // or nil if the field Name is unknown.
 func NewTLV(tag Tag, value []byte) Body {
-	return &Field{ Tag: tag, Data: value }
+	return &Field{Tag: tag, Data: value}
 }

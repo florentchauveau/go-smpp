@@ -24,8 +24,8 @@ func TestShortMessage(t *testing.T) {
 		case pdu.SubmitSMID:
 			r := pdu.NewSubmitSMResp()
 			r.Header().Seq = p.Header().Seq
-			r.Fields().Set(pdufield.MessageID, "foobar")
-			c.Write(r)
+			_ = r.Fields().Set(pdufield.MessageID, "foobar")
+			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
 		}
@@ -70,8 +70,8 @@ func TestShortMessageWindowSize(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		r := pdu.NewSubmitSMResp()
 		r.Header().Seq = p.Header().Seq
-		r.Fields().Set(pdufield.MessageID, "foobar")
-		c.Write(r)
+		_ = r.Fields().Set(pdufield.MessageID, "foobar")
+		_ = c.Write(r)
 	}
 	s.Start()
 	defer s.Close()
@@ -128,9 +128,9 @@ func TestLongMessage(t *testing.T) {
 		case pdu.SubmitSMID:
 			r := pdu.NewSubmitSMResp()
 			r.Header().Seq = p.Header().Seq
-			r.Fields().Set(pdufield.MessageID, fmt.Sprintf("foobar%d", count))
+			_ = r.Fields().Set(pdufield.MessageID, fmt.Sprintf("foobar%d", count))
 			count++
-			c.Write(r)
+			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
 		}
@@ -183,7 +183,7 @@ func TestLongMessageAsUCS2(t *testing.T) {
 		case pdu.SubmitSMID:
 			r := pdu.NewSubmitSMResp()
 			r.Header().Seq = p.Header().Seq
-			r.Fields().Set(pdufield.MessageID, fmt.Sprintf("foobar%d", count))
+			_ = r.Fields().Set(pdufield.MessageID, fmt.Sprintf("foobar%d", count))
 			count++
 			smByts := p.Fields()[pdufield.ShortMessage].Bytes()
 			switch pdutext.DataCoding(p.Fields()[pdufield.DataCoding].Raw().(uint8)) {
@@ -194,7 +194,7 @@ func TestLongMessageAsUCS2(t *testing.T) {
 			default:
 				receivedMsg = receivedMsg + string(smByts[7:])
 			}
-			c.Write(r)
+			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
 		}
@@ -247,9 +247,9 @@ func TestQuerySM(t *testing.T) {
 	s.Handler = func(c smpptest.Conn, p pdu.Body) {
 		r := pdu.NewQuerySMResp()
 		r.Header().Seq = p.Header().Seq
-		r.Fields().Set(pdufield.MessageID, p.Fields()[pdufield.MessageID])
-		r.Fields().Set(pdufield.MessageState, 2)
-		c.Write(r)
+		_ = r.Fields().Set(pdufield.MessageID, p.Fields()[pdufield.MessageID])
+		_ = r.Fields().Set(pdufield.MessageState, 2)
+		_ = c.Write(r)
 	}
 	s.Start()
 	defer s.Close()
@@ -295,10 +295,10 @@ func TestSubmitMulti(t *testing.T) {
 		case pdu.SubmitMultiID:
 			r := pdu.NewSubmitMultiResp()
 			r.Header().Seq = p.Header().Seq
-			r.Fields().Set(pdufield.MessageID, "foobar")
-			r.Fields().Set(pdufield.NoUnsuccess, uint8(1))
-			r.Fields().Set(pdufield.UnsuccessSme, bArray)
-			c.Write(r)
+			_ = r.Fields().Set(pdufield.MessageID, "foobar")
+			_ = r.Fields().Set(pdufield.NoUnsuccess, uint8(1))
+			_ = r.Fields().Set(pdufield.UnsuccessSme, bArray)
+			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
 		}
@@ -352,8 +352,8 @@ func TestNotConnected(t *testing.T) {
 		case pdu.SubmitSMID:
 			r := pdu.NewSubmitSMResp()
 			r.Header().Seq = p.Header().Seq
-			r.Fields().Set(pdufield.MessageID, "foobar")
-			c.Write(r)
+			_ = r.Fields().Set(pdufield.MessageID, "foobar")
+			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
 		}
