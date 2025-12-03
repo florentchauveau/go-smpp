@@ -6,8 +6,10 @@ package pdufield
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 // Name is the name of a PDU field.
@@ -50,6 +52,13 @@ const (
 	GSMUserData          Name = "gsm_sms_ud.udh"
 	UnsuccessSme         Name = "unsuccess_sme"
 	ValidityPeriod       Name = "validity_period"
+
+	UDHIEIConcatenatedShortMessage8Bit  = 0x00
+	UDHIEIConcatenatedShortMessage16Bit = 0x08
+
+	ESMClassUDHIndicator        = 0x40
+	ESMClassSMSCDeliveryReceipt = 0x04
+	ESMClassDefaultMessageType  = 0x3C
 )
 
 // Fixed is a PDU of fixed length.
@@ -118,6 +127,34 @@ func (v *Variable) Bytes() []byte {
 func (v *Variable) SerializeTo(w io.Writer) error {
 	_, err := w.Write(v.Bytes())
 	return err
+}
+
+// Null is an optional PDU field, it does not write any data.
+type Null struct{}
+
+// Len implements the Data interface.
+func (o *Null) Len() int {
+	return 0
+}
+
+// Raw implements the Data interface.
+func (o *Null) Raw() any {
+	return nil
+}
+
+// String implements the Data interface.
+func (o *Null) String() string {
+	return ""
+}
+
+// Bytes implements the Data interface.
+func (o *Null) Bytes() []byte {
+	return []byte{}
+}
+
+// SerializeTo implements the Data interface.
+func (o *Null) SerializeTo(w io.Writer) error {
+	return nil
 }
 
 // SM is a PDU field used for Short Messages.
@@ -326,16 +363,61 @@ func (usl *UnSmeList) SerializeTo(w io.Writer) error {
 	return err
 }
 
-// UDH is a PDU field used for user data header.
+// UDHIE is an Information Element (IE) of User Data Header (UDH)
+type UDHIE struct {
+	IEI      uint8
+	IELength uint8
+	IEData   []byte
+}
+
+// Len implements the Data interface.
+func (ie *UDHIE) Len() int {
+	return 2 + len(ie.IEData)
+}
+
+// Raw implements the Data interface.
+func (ie *UDHIE) Raw() any {
+	return ie.Bytes()
+}
+
+// String implements the Data interface.
+func (ie *UDHIE) String() string {
+	var ret []string
+	ret = append(ret, fmt.Sprintf("%02x", ie.IEI))
+	ret = append(ret, fmt.Sprintf("%02x", ie.IELength))
+	for _, b := range ie.IEData {
+		ret = append(ret, fmt.Sprintf("%02x", b))
+	}
+	return strings.Join(ret, ":")
+}
+
+// Bytes implements the Data interface.
+func (ie *UDHIE) Bytes() []byte {
+	var ret []byte
+	ret = append(ret, ie.IEI)
+	ret = append(ret, ie.IELength)
+	ret = append(ret, ie.IEData...)
+	return ret
+}
+
+// SerializeTo implements the Data interface.
+func (ie *UDHIE) SerializeTo(w io.Writer) error {
+	_, err := w.Write(ie.Bytes())
+	return err
+}
+
+// UDH is a PDU field used for User Data Header.
 type UDH struct {
-	IEI      Fixed
-	IELength Fixed
-	IEData   Variable
+	IE []UDHIE
 }
 
 // Len implements the Data interface.
 func (udh *UDH) Len() int {
-	return udh.IEI.Len() + udh.IELength.Len() + udh.IEData.Len()
+	var ret int
+	for i := range udh.IE {
+		ret = ret + udh.IE[i].Len()
+	}
+	return ret
 }
 
 // Raw implements the Data interface.
@@ -343,17 +425,22 @@ func (udh *UDH) Raw() any {
 	return udh.Bytes()
 }
 
-// String implements the Data interface.
+// String implements the Data interface. It returns a colon-separated hex string, including the UDH length.
 func (udh *UDH) String() string {
-	return udh.IEI.String() + "," + udh.IELength.String() + "," + udh.IEData.String()
+	var ret []string
+	ret = append(ret, fmt.Sprintf("%02x", udh.Len()))
+	for i := range udh.IE {
+		ret = append(ret, udh.IE[i].String())
+	}
+	return strings.Join(ret, ":")
 }
 
 // Bytes implements the Data interface.
 func (udh *UDH) Bytes() []byte {
 	var ret []byte
-	ret = append(ret, udh.IEI.Bytes()...)
-	ret = append(ret, udh.IELength.Bytes()...)
-	ret = append(ret, udh.IEData.Bytes()...)
+	for i := range udh.IE {
+		ret = append(ret, udh.IE[i].Bytes()...)
+	}
 	return ret
 }
 
@@ -363,45 +450,64 @@ func (udh *UDH) SerializeTo(w io.Writer) error {
 	return err
 }
 
-// UDHList contains a list of UDH.
-type UDHList struct {
-	Data []UDH
-}
-
-// Len implements the Data interface.
-func (udhl *UDHList) Len() int {
-	var ret int
-	for i := range udhl.Data {
-		ret = ret + udhl.Data[i].Len()
+// IsConcatenated checks if the UDH contains a concatenated short message IE.
+func (udh *UDH) IsConcatenated() (concatenated bool, ref, total, part int) {
+	for _, ie := range udh.IE {
+		if ie.IEI == UDHIEIConcatenatedShortMessage8Bit && ie.IELength == 3 {
+			concatenated = true
+			ref = int(ie.IEData[0])
+			total = int(ie.IEData[1])
+			part = int(ie.IEData[2])
+			return
+		}
+		if ie.IEI == UDHIEIConcatenatedShortMessage16Bit && ie.IELength == 4 {
+			concatenated = true
+			ref = int(binary.BigEndian.Uint16(ie.IEData[0:2]))
+			total = int(ie.IEData[2])
+			part = int(ie.IEData[3])
+			return
+		}
 	}
-	return ret
+	total = 1
+	part = 1
+	return
 }
 
-// Raw implements the Data interface.
-func (udhl *UDHList) Raw() any {
-	return udhl.Bytes()
-}
-
-// String implements the Data interface.
-func (udhl *UDHList) String() string {
-	var ret string
-	for i := range udhl.Data {
-		ret = ret + udhl.Data[i].String() + ";"
+// NewIEConcatenatedShortMessage creates a new UDHIE for a concatenated short message.
+func NewIEConcatenatedShortMessage(ref uint16, total int, part int) UDHIE {
+	var iei uint8
+	var data []byte
+	var length uint8
+	if ref > 0xFF {
+		iei = UDHIEIConcatenatedShortMessage16Bit
+		data = []byte{
+			byte(ref >> 8),
+			byte(ref & 0xFF),
+			byte(total),
+			byte(part),
+		}
+		length = 4
+	} else {
+		iei = UDHIEIConcatenatedShortMessage8Bit
+		data = []byte{
+			byte(ref & 0xFF),
+			byte(total),
+			byte(part),
+		}
+		length = 3
 	}
-	return ret
-}
-
-// Bytes implements the Data interface.
-func (udhl *UDHList) Bytes() []byte {
-	var ret []byte
-	for i := range udhl.Data {
-		ret = append(ret, udhl.Data[i].Bytes()...)
+	return UDHIE{
+		IEI:      iei,
+		IELength: length,
+		IEData:   data,
 	}
-	return ret
 }
 
-// SerializeTo implements the Data interface.
-func (udhl *UDHList) SerializeTo(w io.Writer) error {
-	_, err := w.Write(udhl.Bytes())
-	return err
+// NewUDHConcatenatedShortMessage creates a new UDH for a concatenated short message.
+func NewUDHConcatenatedShortMessage(ref uint16, total int, part int) UDH {
+	return UDH{
+		IE: []UDHIE{
+			NewIEConcatenatedShortMessage(ref, total, part),
+		},
+	}
 }

@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -42,8 +42,6 @@ type Transmitter struct {
 	TLS                *tls.Config   // TLS client settings, optional.
 	RateLimiter        RateLimiter   // Rate limiter, optional.
 	WindowSize         uint
-	rMutex             sync.Mutex
-	r                  *rand.Rand
 
 	cl struct {
 		sync.Mutex
@@ -67,7 +65,6 @@ type tx struct {
 // Any commands (e.g. Submit) attempted on a dead connection will
 // return ErrNotConnected.
 func (t *Transmitter) Bind() <-chan ConnStatus {
-	t.r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	t.cl.Lock()
 	defer t.cl.Unlock()
 	if t.cl.client != nil {
@@ -374,29 +371,20 @@ func (t *Transmitter) SubmitLongMsg(sm *ShortMessage) ([]ShortMessage, error) {
 
 	parts := make([]ShortMessage, 0, countParts)
 
-	t.rMutex.Lock()
-	rn := uint16(t.r.Intn(0xFFFF))
-	t.rMutex.Unlock()
-	UDHHeader := make([]byte, 7)
-	UDHHeader[0] = 0x06              // length of user data header
-	UDHHeader[1] = 0x08              // information element identifier, CSMS 16 bit reference number
-	UDHHeader[2] = 0x04              // length of remaining header
-	UDHHeader[3] = uint8(rn >> 8)    // most significant byte of the reference number
-	UDHHeader[4] = uint8(rn)         // least significant byte of the reference number
-	UDHHeader[5] = uint8(countParts) // total number of message parts
+	rn := uint16(rand.IntN(0xFFFF))
 	for i := range countParts {
-		UDHHeader[6] = uint8(i + 1) // current message part
+		udh := pdufield.NewUDHConcatenatedShortMessage(rn, countParts, i+1)
 		p := pdu.NewSubmitSM(sm.TLVFields)
 		f := p.Fields()
 		_ = f.Set(pdufield.SourceAddr, sm.Src)
 		_ = f.Set(pdufield.DestinationAddr, sm.Dst)
 		if i != countParts-1 {
-			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:(i+1)*maxLen]...)))
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(rawMsg[i*maxLen:(i+1)*maxLen]))
 		} else {
-			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(append(UDHHeader, rawMsg[i*maxLen:]...)))
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(rawMsg[i*maxLen:]))
 		}
 		_ = f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
-		if sm.Validity != time.Duration(0) {
+		if sm.Validity != 0 {
 			_ = f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
 		}
 		_ = f.Set(pdufield.ServiceType, sm.ServiceType)
@@ -404,13 +392,16 @@ func (t *Transmitter) SubmitLongMsg(sm *ShortMessage) ([]ShortMessage, error) {
 		_ = f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
 		_ = f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
 		_ = f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
-		_ = f.Set(pdufield.ESMClass, 0x40)
+		_ = f.Set(pdufield.ESMClass, pdufield.ESMClassUDHIndicator)
 		_ = f.Set(pdufield.ProtocolID, sm.ProtocolID)
 		_ = f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
 		_ = f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
 		_ = f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
 		_ = f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
 		_ = f.Set(pdufield.DataCoding, uint8(sm.Text.Type()))
+		_ = f.Set(pdufield.UDHLength, uint8(udh.Len()))
+		_ = f.Set(pdufield.GSMUserData, &udh)
+		_ = f.Set(pdufield.SMLength, uint8(f[pdufield.ShortMessage].Len()+udh.Len()+1)) // +1 for UDHLength octet
 		resp, err := t.do(p)
 		if err != nil {
 			return nil, err

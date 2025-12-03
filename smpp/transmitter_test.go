@@ -5,7 +5,9 @@
 package smpp
 
 import (
+	"bytes"
 	"fmt"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -162,13 +164,98 @@ func TestLongMessage(t *testing.T) {
 	if len(parts) != 2 {
 		t.Fatalf("expected %d responses, but received %d", 2, len(parts))
 	}
-	for index, sm := range parts {
-		msgid := sm.RespID()
+	for index := range parts {
+		msgid := parts[index].RespID()
 		if msgid == "" {
-			t.Fatalf("pdu does not contain msgid: %#v", sm.Resp())
+			t.Fatalf("pdu does not contain msgid: %#v", parts[index].Resp())
 		}
 		if msgid != fmt.Sprintf("foobar%d", index) {
 			t.Fatalf("unexpected msgid: want foobar%d, have %q", index, msgid)
+		}
+	}
+}
+
+func TestLongMessageEncode(t *testing.T) {
+	sm := &ShortMessage{
+		Src:      "root",
+		Dst:      "foobar",
+		Text:     pdutext.GSM7("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam consequat nisl enim, vel finibus neque aliquet sit amet. Interdum et malesuada fames ac ante ipsum primis in faucibus."),
+		Validity: 10 * time.Minute,
+		Register: pdufield.NoDeliveryReceipt,
+	}
+
+	maxLen := 133 // 140-7 (UDH with 2 byte reference number)
+	switch sm.Text.(type) {
+	case pdutext.GSM7:
+		maxLen = 152 // to avoid an escape character being split between payloads
+	case pdutext.GSM7Packed:
+		maxLen = 132 // to avoid an escape character being split between payloads
+	case pdutext.UCS2:
+		maxLen = 132 // to avoid a character being split between payloads
+	}
+	rawMsg := sm.Text.Encode()
+	countParts := int((len(rawMsg)-1)/maxLen) + 1
+	ref := uint16(rand.IntN(0xFFFF))
+	for i := range countParts {
+		udh := pdufield.NewUDHConcatenatedShortMessage(ref, countParts, i+1)
+		p := pdu.NewSubmitSM(sm.TLVFields)
+		f := p.Fields()
+		_ = f.Set(pdufield.SourceAddr, sm.Src)
+		_ = f.Set(pdufield.DestinationAddr, sm.Dst)
+		if i != countParts-1 {
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(rawMsg[i*maxLen:(i+1)*maxLen]))
+		} else {
+			_ = f.Set(pdufield.ShortMessage, pdutext.Raw(rawMsg[i*maxLen:]))
+		}
+		_ = f.Set(pdufield.RegisteredDelivery, uint8(sm.Register))
+		if sm.Validity != 0 {
+			_ = f.Set(pdufield.ValidityPeriod, convertValidity(sm.Validity))
+		}
+		_ = f.Set(pdufield.ServiceType, sm.ServiceType)
+		_ = f.Set(pdufield.SourceAddrTON, sm.SourceAddrTON)
+		_ = f.Set(pdufield.SourceAddrNPI, sm.SourceAddrNPI)
+		_ = f.Set(pdufield.DestAddrTON, sm.DestAddrTON)
+		_ = f.Set(pdufield.DestAddrNPI, sm.DestAddrNPI)
+		_ = f.Set(pdufield.ESMClass, pdufield.ESMClassUDHIndicator)
+		_ = f.Set(pdufield.ProtocolID, sm.ProtocolID)
+		_ = f.Set(pdufield.PriorityFlag, sm.PriorityFlag)
+		_ = f.Set(pdufield.ScheduleDeliveryTime, sm.ScheduleDeliveryTime)
+		_ = f.Set(pdufield.ReplaceIfPresentFlag, sm.ReplaceIfPresentFlag)
+		_ = f.Set(pdufield.SMDefaultMsgID, sm.SMDefaultMsgID)
+		_ = f.Set(pdufield.DataCoding, uint8(sm.Text.Type()))
+		_ = f.Set(pdufield.UDHLength, uint8(udh.Len()))
+		_ = f.Set(pdufield.GSMUserData, &udh)
+		_ = f.Set(pdufield.SMLength, uint8(f[pdufield.ShortMessage].Len()+udh.Len()+1)) // +1 for UDHLength octet
+		wire := bytes.NewBuffer(nil)
+		err := p.SerializeTo(wire)
+		if err != nil {
+			t.Fatalf("error marshalling pdu: %v", err)
+		}
+		encoded, err := pdu.Decode(wire)
+		if err != nil {
+			t.Fatalf("error unmarshalling pdu: %v", err)
+		}
+		encodedSM := encoded.Fields()[pdufield.ShortMessage]
+		if encodedSM.String() != f[pdufield.ShortMessage].String() {
+			t.Fatalf("part %d: expected short message %q, got %q", i+1, f[pdufield.ShortMessage].String(), encodedSM.String())
+		}
+		// encoded.UDH()
+		udhField := encoded.UDH()
+		if udhField == nil {
+			t.Fatalf("part %d: missing UDH field", i+1)
+		}
+		concatenated, expectedRef, total, part := udhField.IsConcatenated()
+		if !concatenated {
+			t.Fatalf("part %d: UDH IsConcatenated = %v, want %v", i+1, concatenated, true)
+		}
+		if total != countParts {
+			t.Fatalf("part %d: UDH IsConcatenated total = %d, want %d", i+1, total, countParts)
+		}
+		if part != i+1 {
+			t.Fatalf("part %d: UDH IsConcatenated part = %d, want %d", i+1, part, i+1)
+		}
+		if expectedRef != int(ref) {
+			t.Fatalf("part %d: UDH IsConcatenated ref = %d, want %d", i+1, expectedRef, ref)
 		}
 	}
 }
@@ -185,15 +272,7 @@ func TestLongMessageAsUCS2(t *testing.T) {
 			r.Header().Seq = p.Header().Seq
 			_ = r.Fields().Set(pdufield.MessageID, fmt.Sprintf("foobar%d", count))
 			count++
-			smByts := p.Fields()[pdufield.ShortMessage].Bytes()
-			switch pdutext.DataCoding(p.Fields()[pdufield.DataCoding].Raw().(uint8)) {
-			case pdutext.Latin1Type:
-				receivedMsg = receivedMsg + string(pdutext.Latin1(smByts)[7:].Decode())
-			case pdutext.UCS2Type:
-				receivedMsg = receivedMsg + string(pdutext.UCS2(smByts)[7:].Decode())
-			default:
-				receivedMsg = receivedMsg + string(smByts[7:])
-			}
+			receivedMsg = receivedMsg + p.Fields()[pdufield.ShortMessage].String()
 			_ = c.Write(r)
 		default:
 			smpptest.EchoHandler(c, p)
@@ -226,10 +305,10 @@ func TestLongMessageAsUCS2(t *testing.T) {
 	if len(parts) != 3 {
 		t.Fatalf("expected %d responses, but received %d", 3, len(parts))
 	}
-	for index, sm := range parts {
-		msgid := sm.RespID()
+	for index := range parts {
+		msgid := parts[index].RespID()
 		if msgid == "" {
-			t.Fatalf("pdu does not contain msgid: %#v", sm.Resp())
+			t.Fatalf("pdu does not contain msgid: %#v", parts[index].Resp())
 		}
 
 		if receivedMsg != shortMsg {

@@ -235,3 +235,27 @@ func TestUnSmeList(t *testing.T) {
 		t.Fatalf("unexpected serialized bytes: want %q, have %q", bytesRep, v)
 	}
 }
+
+func TestUDH(t *testing.T) {
+	udh := NewUDHConcatenatedShortMessage(0x4142, 2, 2)
+	want := []byte{0x08, 0x04, 0x41, 0x42, 0x02, 0x02}
+	if len(udh.Bytes()) != len(want) {
+		t.Fatalf("unexpected len: want %d, have %d", len(want), len(udh.Bytes()))
+	}
+	if v, ok := udh.Raw().([]byte); !ok {
+		t.Fatalf("unexpected type: want []byte, have %#v", v)
+	}
+	if v := udh.String(); v != "06:08:04:41:42:02:02" {
+		t.Fatalf("unexpected string: want %q have %q", "06:08:04:41:42:02:02", v)
+	}
+	if v := udh.Bytes(); !bytes.Equal(want, v) {
+		t.Fatalf("unexpected bytes: want %q, have %q", want, v)
+	}
+	var b bytes.Buffer
+	if err := udh.SerializeTo(&b); err != nil {
+		t.Fatalf("serialization failed: %s", err)
+	}
+	if v := b.Bytes(); !bytes.Equal(want, v) {
+		t.Fatalf("unexpected serialized bytes: want %q, have %q", want, v)
+	}
+}

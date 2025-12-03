@@ -102,6 +102,15 @@ func (pdu *codec) SerializeTo(w io.Writer) error {
 	return err
 }
 
+// UDH implements the PDU interface.
+func (pdu *codec) UDH() *pdufield.UDH {
+	udh, ok := pdu.f[pdufield.GSMUserData].(*pdufield.UDH)
+	if !ok {
+		return nil
+	}
+	return udh
+}
+
 // decoder wraps a PDU (e.g. Bind) and the codec together and is
 // used for initializing new PDUs with map data decoded off the wire.
 type decoder interface {

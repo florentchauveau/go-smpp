@@ -39,4 +39,8 @@ type Body interface {
 	// SerializeTo encodes the PDU to its binary form, including
 	// the header and all fields.
 	SerializeTo(w io.Writer) error
+
+	// UDH returns the User Data Header (UDH) if present in the PDU,
+	// or nil otherwise.
+	UDH() *pdufield.UDH
 }

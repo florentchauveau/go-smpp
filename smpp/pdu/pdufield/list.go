@@ -6,8 +6,9 @@ package pdufield
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+
+	"github.com/florentchauveau/go-smpp/smpp/pdu/pdutext"
 )
 
 // List is a list of PDU fields.
@@ -21,8 +22,8 @@ type List []Name
 func (l List) Decode(r *bytes.Buffer) (Map, error) {
 	var (
 		unsuccessCount, numDest, udhLength, smLength int
-
-		udhiFlag bool
+		dataCoding                                   pdutext.DataCoding
+		udhiFlag                                     bool
 	)
 	f := make(Map)
 loop:
@@ -77,6 +78,8 @@ loop:
 			}
 			f[k] = &Fixed{Data: b}
 			switch k {
+			case DataCoding:
+				dataCoding = pdutext.DataCoding(b)
 			case NoUnsuccess:
 				unsuccessCount = int(b)
 			case NumberDests:
@@ -89,6 +92,7 @@ loop:
 			}
 		case UDHLength:
 			if !udhiFlag {
+				f[k] = &Null{}
 				continue
 			}
 			b, err := r.ReadByte()
@@ -102,12 +106,13 @@ loop:
 			f[k] = &Fixed{Data: b}
 		case GSMUserData:
 			if !udhiFlag {
+				f[k] = &Null{}
 				continue
 			}
-			var udhList []UDH
+			var ieList []UDHIE
 			var l int
 			for i := udhLength; i > 0; i -= l + 2 {
-				var udh UDH
+				var ie UDHIE
 				// Read IEI
 				b, err := r.ReadByte()
 				if err == io.EOF {
@@ -116,7 +121,7 @@ loop:
 				if err != nil {
 					return nil, err
 				}
-				udh.IEI = Fixed{Data: b}
+				ie.IEI = b
 				// Read IELength
 				b, err = r.ReadByte()
 				if err == io.EOF {
@@ -126,16 +131,16 @@ loop:
 					return nil, err
 				}
 				l = int(b)
-				udh.IELength = Fixed{Data: b}
+				ie.IELength = b
 				// Read IEData
 				bt := r.Next(l)
-				udh.IEData = Variable{Data: bt}
-				udhList = append(udhList, udh)
+				ie.IEData = bt
+				ieList = append(ieList, ie)
 				if len(bt) != l {
 					break loop
 				}
 			}
-			f[k] = &UDHList{Data: udhList}
+			f[k] = &UDH{IE: ieList}
 		case DestinationList:
 			var destList []DestSme
 			for i := 0; i < numDest; i++ {
@@ -217,21 +222,22 @@ loop:
 			}
 			f[k] = &UnSmeList{Data: unsList}
 		case ShortMessage:
-			// Check UDHLength
-			if udhLength > 0 {
-				if smLength-udhLength-1 < 0 {
-					return nil, fmt.Errorf("smLength is lesser than udhLength+1: have %d and %d",
-						smLength, udhLength)
-				}
-				smLength -= udhLength + 1
-				f[SMLength] = &Fixed{Data: byte(smLength)}
+			if udhiFlag {
+				smLength -= udhLength + 1 // +1 for UDHLength octet
 			}
-			// Check SMLength
-			if r.Len() < smLength {
-				return nil, fmt.Errorf("short read for smlength: want %d, have %d",
-					smLength, r.Len())
+			msg := r.Next(smLength)
+			// Decode text according to DataCoding
+			switch dataCoding {
+			case pdutext.DefaultType:
+				msg = pdutext.GSM7(msg).Decode()
+			case pdutext.Latin1Type:
+				msg = pdutext.Latin1(msg).Decode()
+			case pdutext.UCS2Type:
+				msg = pdutext.UCS2(msg).Decode()
+			case pdutext.ISO88595Type:
+				msg = pdutext.ISO88595(msg).Decode()
 			}
-			f[ShortMessage] = &SM{Data: r.Next(smLength)}
+			f[k] = &SM{Data: msg}
 		}
 	}
 	return f, nil

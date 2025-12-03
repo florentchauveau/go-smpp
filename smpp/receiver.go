@@ -146,12 +146,13 @@ func idInList(id pdu.ID, list []pdu.ID) bool {
 
 func (r *Receiver) handlePDU() {
 	var (
-		ok                bool
-		sm                *pdufield.SM
-		udhList           *pdufield.UDHList
-		msgID, partsCount int
-		mh                *MergeHolder
-		orderedBodies     []*bytes.Buffer
+		ok               bool
+		concatenated     bool
+		ref, total, part int
+		sm               pdufield.Body
+		udh              *pdufield.UDH
+		mh               *MergeHolder
+		orderedBodies    []*bytes.Buffer
 	)
 	autoRespondDeliver := !idInList(pdu.DeliverSMID, r.SkipAutoRespondIDs)
 
@@ -172,72 +173,62 @@ loop:
 			continue
 		}
 
-		sm, ok = p.Fields()[pdufield.ShortMessage].(*pdufield.SM)
-		if !ok {
+		sm, ok = p.Fields()[pdufield.ShortMessage]
+		if !ok || sm == nil {
 			// PDU is malformed, do not process
 			continue
 		}
 
-		udhList, ok = p.Fields()[pdufield.GSMUserData].(*pdufield.UDHList)
-		if !ok { // Check if GSMUserData is present inside the PDU, do not try to merge if it's not
+		udh = p.UDH()
+		if udh == nil { // Check if GSMUserData is present inside the PDU, do not try to merge if it's not
+			r.Handler(p)
+			continue
+		}
+		if concatenated, ref, total, part = udh.IsConcatenated(); !concatenated {
 			r.Handler(p)
 			continue
 		}
 
-		for _, udh := range udhList.Data {
-			switch udh.IEI.Data {
-			case 0x00: // Concatenated short messages, 8-bit reference number
-				if int(udh.IELength.Data) != 3 { // Contains message ID, parts count and part number
-					// PDU is malformed, do not process
-					break
-				}
-
-				// Get message ID and total count of its parts
-				msgID = int(udh.IEData.Data[0])
-				partsCount = int(udh.IEData.Data[1])
-
-				// Check if message part was already added to a MergeHolder
-				r.mg.Lock()
-				if mh, ok = r.mg.mergeHolders[msgID]; !ok {
-					mh = &MergeHolder{
-						MessageID:  msgID,
-						PartsCount: partsCount,
-					}
-
-					r.mg.mergeHolders[msgID] = mh
-				}
-				r.mg.Unlock()
-
-				// Add current part of the message to the slice
-				mh.MessageParts = append(mh.MessageParts, &MessagePart{
-					PartID: int(udh.IEData.Data[2]),
-					Data:   bytes.NewBuffer(sm.Data),
-				})
-				mh.LastWriteTime = time.Now()
-
-				// Check if we have all the parts of the message
-				if len(mh.MessageParts) != mh.PartsCount {
-					continue loop
-				}
-
-				// Order up PDUs
-				orderedBodies = make([]*bytes.Buffer, partsCount)
-				for _, mp := range mh.MessageParts {
-					orderedBodies[mp.PartID-1] = mp.Data
-				}
-
-				// Merge PDUs
-				var buf bytes.Buffer
-				for _, body := range orderedBodies {
-					buf.Write(body.Bytes())
-				}
-
-				_ = p.Fields().Set(pdufield.ShortMessage, buf.Bytes())
-
-				// Handle
-				r.Handler(p)
+		// Check if message part was already added to a MergeHolder
+		r.mg.Lock()
+		if mh, ok = r.mg.mergeHolders[ref]; !ok {
+			mh = &MergeHolder{
+				MessageID:  ref,
+				PartsCount: total,
 			}
+
+			r.mg.mergeHolders[ref] = mh
 		}
+		r.mg.Unlock()
+
+		// Add current part of the message to the slice
+		mh.MessageParts = append(mh.MessageParts, &MessagePart{
+			PartID: part,
+			Data:   bytes.NewBuffer(sm.Bytes()),
+		})
+		mh.LastWriteTime = time.Now()
+
+		// Check if we have all the parts of the message
+		if len(mh.MessageParts) != mh.PartsCount {
+			continue loop
+		}
+
+		// Order up PDUs
+		orderedBodies = make([]*bytes.Buffer, total)
+		for _, mp := range mh.MessageParts {
+			orderedBodies[mp.PartID-1] = mp.Data
+		}
+
+		// Merge PDUs
+		var buf bytes.Buffer
+		for _, body := range orderedBodies {
+			buf.Write(body.Bytes())
+		}
+
+		_ = p.Fields().Set(pdufield.ShortMessage, buf.Bytes())
+
+		// Handle
+		r.Handler(p)
 	}
 }
 

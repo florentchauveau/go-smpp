@@ -66,8 +66,8 @@ func TestServer(t *testing.T) {
 	for k, v := range p.Fields() {
 		vv, exists := r.Fields()[k]
 		if !exists {
-			t.Fatalf("unexpected fields: want %#v, have %#v",
-				p.Fields(), r.Fields())
+			t.Fatalf("unexpected fields: want %+v, have %+v, missing %q in r",
+				p.Fields(), r.Fields(), k)
 		}
 		if !bytes.Equal(v.Bytes(), vv.Bytes()) {
 			t.Fatalf("unexpected field data: want %#v, have %#v",

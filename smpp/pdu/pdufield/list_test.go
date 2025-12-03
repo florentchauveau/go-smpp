@@ -134,3 +134,53 @@ func TestListDecoder_UnSmeList(t *testing.T) {
 		t.Fatalf("unexpected data: want %q, have %q, len %d", resUnSmeList, v, len(v.Data))
 	}
 }
+
+func TestListDecoderDataEncoding(t *testing.T) {
+	l := List{
+		ServiceType,
+		SourceAddrTON,
+		SourceAddrNPI,
+		SourceAddr,
+		DestAddrTON,
+		DestAddrNPI,
+		DestinationAddr,
+		ESMClass,
+		ProtocolID,
+		PriorityFlag,
+		ScheduleDeliveryTime,
+		ValidityPeriod,
+		RegisteredDelivery,
+		ReplaceIfPresentFlag,
+		DataCoding,
+		SMDefaultMsgID,
+		SMLength,
+		UDHLength,
+		GSMUserData,
+		ShortMessage,
+	}
+	raw := []byte{
+		0x0, 0x1, 0x1, 0x33, 0x33, 0x36, 0x33, 0x39,
+		0x39, 0x38, 0x30, 0x30, 0x31, 0x30, 0x0, 0x1,
+		0x1, 0x33, 0x33, 0x36, 0x33, 0x39, 0x39, 0x38,
+		0x30, 0x30, 0x32, 0x30, 0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xb, 0x45,
+		0x6e, 0x20, 0x65, 0x75, 0x72, 0x6f, 0x73, 0x20,
+		0x1b, 0x65,
+	}
+	f, err := l.Decode(bytes.NewBuffer(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	smField, ok := f[ShortMessage]
+	if !ok {
+		t.Fatalf("missing %q key: %#v", ShortMessage, f)
+	}
+	sm, ok := smField.(*SM)
+	if !ok {
+		t.Fatalf("field is not type SM: %#v", smField)
+	}
+	wantText := "En euros €"
+	if sm.String() != wantText {
+		t.Fatalf("unexpected decoded text: want %q, have %q", wantText, sm.String())
+	}
+}

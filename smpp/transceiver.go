@@ -7,7 +7,6 @@ package smpp
 import (
 	"crypto/tls"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/florentchauveau/go-smpp/smpp/pdu"
@@ -36,7 +35,6 @@ type Transceiver struct {
 
 // Bind implements the ClientConn interface.
 func (t *Transceiver) Bind() <-chan ConnStatus {
-	t.r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	t.cl.Lock()
 	defer t.cl.Unlock()
 	if t.cl.client != nil {
