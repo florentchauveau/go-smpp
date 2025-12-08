@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -60,6 +61,56 @@ func Dial(addr string, TLS *tls.Config) (Conn, error) {
 		addr = "localhost:2775"
 	}
 	fd, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	if TLS != nil {
+		fd = tls.Client(fd, TLS)
+	}
+	c := &conn{
+		rwc: fd,
+		r:   bufio.NewReader(fd),
+		w:   bufio.NewWriter(fd),
+	}
+	return c, nil
+}
+
+// DialBind dials to the SMPP server using the provided network interface name.
+// TLS is only used if provided.
+func DialBind(addr string, iface string, TLS *tls.Config) (Conn, error) {
+	if iface == "" {
+		return Dial(addr, TLS)
+	}
+	if addr == "" {
+		addr = "localhost:2775"
+	}
+	netIf, err := net.InterfaceByName(iface)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := netIf.Addrs()
+	if err != nil {
+		return nil, err
+	}
+	var ip net.IP
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if v4 := ipnet.IP.To4(); v4 != nil {
+				ip = v4
+				break
+			}
+			if ip == nil {
+				ip = ipnet.IP
+			}
+		}
+	}
+	if ip == nil {
+		return nil, fmt.Errorf("interface %s has no valid IP address", iface)
+	}
+	dialer := net.Dialer{
+		LocalAddr: &net.TCPAddr{IP: ip},
+	}
+	fd, err := dialer.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}

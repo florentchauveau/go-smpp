@@ -35,6 +35,7 @@ type Transmitter struct {
 	User               string        // Username.
 	Passwd             string        // Password.
 	SystemType         string        // System type, default empty.
+	BindIface          string        // Network interface to bind to, optional.
 	EnquireLink        time.Duration // Enquire link interval, default 10s.
 	EnquireLinkTimeout time.Duration // Time after last EnquireLink response when connection considered down
 	RespTimeout        time.Duration // Response timeout, default 1s.
@@ -77,6 +78,7 @@ func (t *Transmitter) Bind() <-chan ConnStatus {
 		Addr:               t.Addr,
 		TLS:                t.TLS,
 		Status:             make(chan ConnStatus, 1),
+		BindIface:          t.BindIface,
 		BindFunc:           t.bindFunc,
 		EnquireLink:        t.EnquireLink,
 		EnquireLinkTimeout: t.EnquireLinkTimeout,

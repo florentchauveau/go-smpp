@@ -21,6 +21,7 @@ type Receiver struct {
 	User                 string
 	Passwd               string
 	SystemType           string
+	BindIface            string
 	EnquireLink          time.Duration
 	EnquireLinkTimeout   time.Duration // Time after last EnquireLink response when connection considered down
 	BindInterval         time.Duration // Binding retry interval
@@ -84,6 +85,7 @@ func (r *Receiver) Bind() <-chan ConnStatus {
 		EnquireLink:        r.EnquireLink,
 		EnquireLinkTimeout: r.EnquireLinkTimeout,
 		Status:             make(chan ConnStatus, 1),
+		BindIface:          r.BindIface,
 		BindFunc:           r.bindFunc,
 		BindInterval:       r.BindInterval,
 	}

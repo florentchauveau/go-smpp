@@ -85,6 +85,7 @@ type client struct {
 	Addr               string
 	TLS                *tls.Config
 	Status             chan ConnStatus
+	BindIface          string
 	BindFunc           func(c Conn) error
 	EnquireLink        time.Duration
 	EnquireLinkTimeout time.Duration
@@ -127,7 +128,7 @@ func (c *client) Bind() {
 	for !c.closed() {
 		eli := make(chan struct{})
 		c.inbox = make(chan pdu.Body)
-		conn, err := Dial(c.Addr, c.TLS)
+		conn, err := DialBind(c.Addr, c.BindIface, c.TLS)
 		if err != nil {
 			c.notify(&connStatus{
 				s:   ConnectionFailed,
