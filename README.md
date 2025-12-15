@@ -2,15 +2,14 @@
 
 [![GoDoc](https://godoc.org/github.com/florentchauveau/go-smpp?status.svg)](https://godoc.org/github.com/florentchauveau/go-smpp) [![Go Report Card](https://goreportcard.com/badge/github.com/florentchauveau/go-smpp)](https://goreportcard.com/report/github.com/florentchauveau/go-smpp)
 
-This is an implementation of SMPP 3.4 for Go, based on the original
-[smpp34](https://github.com/CodeMonkeyKevin/smpp34) from Kevin Patel.
+This is an implementation of SMPP 3.4 for Go, forked from https://github.com/fiorix/go-smpp,
+which is itself based on the original [smpp34](https://github.com/CodeMonkeyKevin/smpp34) 
+from Kevin Patel.
 
-The API has been refactored to idiomatic Go code with more tests
-and documentation. There are also quite a few new features, such
-as a test server (see smpptest package) and support for text
-transformation for LATIN-1 and UCS-2.
+The library has been modernized (Go 1.25+) and improved to follow Go best practices. Support for
+UDH, and concatenated messages has been improved.
 
-It is not fully compliant, there are some TODOs in the code.
+It is not fully compliant, there are some TODOs in the code. However, the library is stable enough to be used in production.
 
 ## Usage
 
